@@ -9,7 +9,7 @@ CCFLAGS ?=
 #CCFLAGS += -DTT_SIMPLE
 
 ## Uncomment to use an external app 'OSDisplay' to have a BezelUI like OSD
-#CCFLAGS += -DOSD
+CCFLAGS += -DOSD
 
 all: clean ddcctl
 

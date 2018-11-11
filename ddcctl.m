@@ -29,11 +29,36 @@ int blacklistedDeviceWithNumber;
 bool useOsd;
 #endif
 
+// Jelikoz ccteni nejak nefunguje, budu si hodnoty pro vychozi display ukladat do user
+// defaults pod temito klici:
+#define kFallbackCurrentBrightness    @"ddctl_current_brightness"
+#define kFallbackCurrentContrast    @"ddctl_current_contrast"
 
 NSString *EDIDString(char *string)
 {
     NSString *temp = [[NSString alloc] initWithBytes:string length:13 encoding:NSASCIIStringEncoding];
     return ([temp rangeOfString:@"\n"].location != NSNotFound) ? [[temp componentsSeparatedByString:@"\n"] objectAtIndex:0] : temp;
+}
+
+/* Fallback cteni z defaults */
+uint getControlFallback(uint control_id)
+{
+    MyLog(@"W: Current value fallbackuju z nastaveni!");
+    uint retVal = 0;
+    switch (control_id) {
+        case 16:
+            retVal = [[NSUserDefaults standardUserDefaults] integerForKey:kFallbackCurrentBrightness];
+            MyLog(@"D: precten fallback %d z %@", retVal, kFallbackCurrentBrightness);
+            break;
+        case 18:
+            retVal = [[NSUserDefaults standardUserDefaults] integerForKey:kFallbackCurrentContrast];
+            MyLog(@"D: precten fallback %d z %@", retVal, kFallbackCurrentContrast);
+            break;
+        default:
+            MyLog(@"D: Fallback pro nastaveni %d neni implementovan!", control_id);
+            break;
+    }
+    return retVal;
 }
 
 /* Get current value for control from display */
@@ -48,6 +73,9 @@ uint getControl(CGDirectDisplayID cdisplay, uint control_id)
     if (!DDCRead(cdisplay, &command)) {
         MyLog(@"E: DDC send command failed!");
         MyLog(@"E: VCP control #%u (0x%02hhx) = current: %u, max: %u", command.control_id, command.control_id, command.current_value, command.max_value);
+        // Prectu fallback, max_value se bohuzel musi fakenout
+        command.current_value = getControlFallback(control_id);
+        command.max_value = 100;
     } else {
         MyLog(@"I: VCP control #%u (0x%02hhx) = current: %u, max: %u", command.control_id, command.control_id, command.current_value, command.max_value);
     }
@@ -64,6 +92,22 @@ void setControl(CGDirectDisplayID cdisplay, uint control_id, uint new_value)
     MyLog(@"D: setting VCP control #%u => %u", command.control_id, command.new_value);
     if (!DDCWrite(cdisplay, &command)){
         MyLog(@"E: Failed to send DDC command!");
+    } else {
+        // Zapamatovat na priste
+        switch (control_id) {
+            case 16:
+                MyLog(@"D: ukladam %u pod %@", command.new_value, kFallbackCurrentBrightness);
+                [[NSUserDefaults standardUserDefaults] setInteger:new_value forKey:kFallbackCurrentBrightness];
+                [[NSUserDefaults standardUserDefaults] synchronize];
+                break;
+            case 18:
+                // Zapamatovat na priste
+                MyLog(@"D: ukladam %u pod %@", command.new_value, kFallbackCurrentContrast);
+                [[NSUserDefaults standardUserDefaults] setInteger:new_value forKey:kFallbackCurrentContrast];
+                [[NSUserDefaults standardUserDefaults] synchronize];
+            default:
+                break;
+        }
     }
 #ifdef OSD
     if (useOsd) {
@@ -75,14 +119,12 @@ void setControl(CGDirectDisplayID cdisplay, uint control_id, uint new_value)
                                                     @"-l", [NSString stringWithFormat:@"%u", new_value],
                                                     @"-i", @"brightness", nil]];
                 break;
-
             case 18:
                 [NSTask launchedTaskWithLaunchPath:OSDisplay
                                          arguments:[NSArray arrayWithObjects:
                                                     @"-l", [NSString stringWithFormat:@"%u", new_value],
                                                     @"-i", @"contrast", nil]];
                 break;
-
             default:
                 break;
         }
@@ -104,6 +146,9 @@ void getSetControl(CGDirectDisplayID cdisplay, uint control_id, NSString *new_va
     if (!DDCRead(cdisplay, &command)) {
         MyLog(@"E: DDC send command failed!");
         MyLog(@"E: VCP control #%u (0x%02hhx) = current: %u, max: %u", command.control_id, command.control_id, command.current_value, command.max_value);
+        // Prectu fallback, max_value se bohuzel musi fakenout
+        command.current_value = getControlFallback(control_id);
+        command.max_value = 100;
     } else {
         MyLog(@"I: VCP control #%u (0x%02hhx) = current: %u, max: %u", command.control_id, command.control_id, command.current_value, command.max_value);
     }
@@ -349,7 +394,7 @@ int main(int argc, const char * argv[])
             CGDirectDisplayID cdisplay = (CGDirectDisplayID)[_displayIDs pointerAtIndex:displayId - 1];
             struct EDID edid = {};
             if (EDIDTest(cdisplay, &edid)) {
-				for (union descriptor *des = edid.descriptors; des < edid.descriptors + sizeof(edid.descriptors); des++) {
+                for (union descriptor *des = edid.descriptors; des < edid.descriptors + sizeof(edid.descriptors); des++) {
                     switch (des->text.type)
                     {
                         case 0xFF:

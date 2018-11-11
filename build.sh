@@ -1,0 +1,1 @@
+make CCFLAGS+='-DOSD -DDEBUG' clean ddcctl

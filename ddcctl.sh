@@ -6,22 +6,22 @@ len="ddcctl -d 2"
 
 dim() {
 	$hp -b 42 -c 26
-	$len -b 4 -c 9
+	#$len -b 4 -c 9
 }
 
 bright() {
 	$hp -b 100 -c 75
-	$len -b 85 -c 80
+	#$len -b 85 -c 80
 }
 
 up() {
 	$hp -b 20+ -c 12+
-	$len -b 15+ -c 12+
+	#$len -b 15+ -c 12+
 }
 
 down() {
 	$hp -b 20- -c 12-
-	$len -b 15- -c 12-
+	#$len -b 15- -c 12-
 }
 
 case "$1" in

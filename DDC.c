@@ -12,7 +12,7 @@
 #include "DDC.h"
 
 #ifndef kMaxRequests
-#define kMaxRequests 10
+#define kMaxRequests 1
 #endif
 
 /*
@@ -28,8 +28,12 @@ static io_service_t IOFramebufferPortFromCGDisplayID(CGDirectDisplayID displayID
 
     kern_return_t err = IOServiceGetMatchingServices(kIOMasterPortDefault, IOServiceMatching(IOFRAMEBUFFER_CONFORMSTO), &iter);
 
-    if (err != KERN_SUCCESS)
+    if (err != KERN_SUCCESS) {
+#ifdef DEBUG
+		printf("\nLine %d Err: %d\n", __LINE__, err);
+#endif
         return 0;
+    }
 
     // now recurse the IOReg tree
     while ((serv = IOIteratorNext(iter)) != MACH_PORT_NULL)
@@ -152,6 +156,13 @@ bool DisplayRequest(CGDirectDisplayID displayID, IOI2CRequest *request) {
     if (request->replyTransactionType == kIOI2CNoTransactionType)
         usleep(20000);
     dispatch_semaphore_signal(queue);
+#ifdef DEBUG
+		if (!result)
+			printf("\nLine %d Err: No result\n", __LINE__);
+		else
+			printf("\nLine %d Err: %d\n", __LINE__, request->result);
+#endif
+
     return result && request->result == KERN_SUCCESS;
 }
 
@@ -199,7 +210,9 @@ bool DDCRead(CGDirectDisplayID displayID, struct DDCReadCommand *read) {
         request.sendBytes                       = 5;
         // Certain displays / graphics cards require a long-enough delay to give a response.
         // Relying on retry will not help if the delay is too short.
-        request.minReplyDelay                   = 30 * kMillisecondScale;  // too short can freeze kernel
+        // XXX: https://github.com/kfix/ddcctl/issues/5
+        // => comment out to avoid kernel freeze on OS X 10+
+        ///request.minReplyDelay                   = 30 * kMillisecondScale;  // too short can freeze kernel
 
         data[0] = 0x51;
         data[1] = 0x82;
@@ -351,8 +364,14 @@ UInt32 SupportedTransactionType() {
         IOObjectRelease(io_service);
 
         // Mac OS offers three framebuffer devices, but we can leave here
+#ifdef DEBUG
+	printf("\nLine %d TT: %d\n", __LINE__, supportedType);
+#endif
         if (supportedType > 0) return supportedType;
     }
+#ifdef DEBUG
+	printf("\nLine %d TT: %d\n", __LINE__, supportedType);
+#endif
 
     return supportedType;
 }
